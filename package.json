@@ -1,0 +1,31 @@
+{
+  "name": "browser-timer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@tsconfig/vite-react": "^7.0.0",
+    "@types/chrome": "^0.0.323",
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  },
+  "keywords": [
+    "chrome",
+    "extension",
+    "browser"
+  ],
+  "author": "Leadman5555",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  }
+}
