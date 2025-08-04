@@ -58,6 +58,13 @@ enum TabOperation {
 }
 
 #[derive(Debug, Deserialize)]
+pub(crate) struct MessageWithId {
+    pub id: u32,
+    #[serde(flatten)]
+    pub message: IncomingMessage,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(tag = "action", content = "data")]
 pub(crate) enum IncomingMessage {
     TabFocused(TabActionData),
@@ -77,6 +84,29 @@ pub(crate) struct OutgoingMessage {
     pub success: bool,
     pub data: Option<serde_json::Value>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct OutgoingMessageWithId {
+    pub success: bool,
+    pub data: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub id: u32,
+}
+
+pub trait WithIdConverter {
+    fn with_id(self, id: u32) -> OutgoingMessageWithId;
+}
+
+impl WithIdConverter for OutgoingMessage {
+    fn with_id(self, id: u32) -> OutgoingMessageWithId {
+        OutgoingMessageWithId {
+            success: self.success,
+            data: self.data,
+            error: self.error,
+            id,
+        }
+    }
 }
 
 impl OutgoingMessage {
@@ -117,7 +147,7 @@ impl NativeMessagingHost {
     }
 
     const MAX_MESSAGE_SIZE: u32 = 1024 * 1024;
-    pub fn read_message(&mut self) -> Result<IncomingMessage, NativeMessagingError> {
+    pub fn read_message(&mut self) -> Result<MessageWithId, NativeMessagingError> {
         // Header
         let mut length_bytes = [0u8; 4];
         self.stdin.read_exact(&mut length_bytes)?;
@@ -133,11 +163,14 @@ impl NativeMessagingHost {
         self.read_buffer.resize(length as usize, 0);
 
         self.stdin.read_exact(&mut self.read_buffer)?;
-        let message: IncomingMessage = serde_json::from_slice(&self.read_buffer)?;
+        let message: MessageWithId = serde_json::from_slice(&self.read_buffer)?;
         Ok(message)
     }
 
-    pub fn send_message(&mut self, message: &OutgoingMessage) -> Result<(), NativeMessagingError> {
+    pub fn send_message(
+        &mut self,
+        message: &OutgoingMessageWithId,
+    ) -> Result<(), NativeMessagingError> {
         let json = serde_json::to_string(message)?;
         let json_bytes = json.as_bytes();
         let length = json_bytes.len() as u32;
@@ -165,13 +198,14 @@ impl NativeMessagingHost {
                 }
             }
             std::process::exit(0);
-        }).expect("Error setting Ctrl-C handler");
+        })
+        .expect("Error setting Ctrl-C handler");
 
         loop {
             match self.read_message() {
                 Ok(message) => {
-                    let response = self.handle_message(message);
-                    if let Err(e) = self.send_message(&response) {
+                    let response = self.handle_message(message.message);
+                    if let Err(e) = self.send_message(&response.with_id(message.id)) {
                         eprintln!("Failed to send response: {}", e);
                         break;
                     }
@@ -192,7 +226,7 @@ impl NativeMessagingHost {
                 }
                 Err(e) => {
                     eprintln!("Error reading message: {}", e);
-                    let _ = self.send_message(&OutgoingMessage::error(e.to_string()));
+                    let _ = self.send_message(&OutgoingMessage::error(e.to_string()).with_id(0));
                     break;
                 }
             }

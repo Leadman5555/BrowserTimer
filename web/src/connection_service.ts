@@ -103,6 +103,11 @@ export class NativeMessagingService {
     return new Promise((resolve, reject) => {
       try {
         this.port = chrome.runtime.connectNative(this.hostName);
+        if (!this.port) {
+          reject(new Error("Failed to create native messaging port"));
+          return;
+        }
+        console.log("Port created successfully");
 
         this.port.onMessage.addListener((message: NativeResponse) => {
           this.handleMessage(message);
@@ -119,11 +124,20 @@ export class NativeMessagingService {
           }
           this.port = null;
         });
-        this.sendMessage(MessageBuilder.ping())
-          .then(() => resolve(true))
-          .catch((e) =>
-            reject(new Error(`Failed to establish connection: ${e}`))
-          );
+        setTimeout(() => {
+          if (this.port) {
+            console.log("Sending ping to verify connection...");
+            this.sendMessage(MessageBuilder.ping())
+              .then(() => {
+                console.log("Ping successful - connection established");
+                resolve(true);
+              })
+              .catch((e) => {
+                console.error("Ping failed:", e);
+                reject(new Error(`Failed to establish connection: ${e}`));
+              });
+          }
+        }, 100);
       } catch (error) {
         reject(error);
       }
@@ -152,7 +166,7 @@ export class NativeMessagingService {
           }
         },
         sent_at: Date.now(),
-        rejecter: reject
+        rejecter: reject,
       });
 
       try {
@@ -167,8 +181,9 @@ export class NativeMessagingService {
   private handleMessage(response: NativeResponse & { id?: string }) {
     if (response.id && this.messageHandlers.has(response.id)) {
       const handler = this.messageHandlers.get(response.id)!;
-      if(Date.now() - handler.sent_at > this.MESSAGE_TIMEOUT_MS){
-        if(handler.rejecter !== undefined) handler.rejecter(new Error("Message timed-out"));
+      if (Date.now() - handler.sent_at > this.MESSAGE_TIMEOUT_MS) {
+        if (handler.rejecter !== undefined)
+          handler.rejecter(new Error("Message timed-out"));
         return;
       }
       handler.handler(response);
@@ -187,9 +202,12 @@ export class NativeMessagingService {
 
   public rejectTimedoutMessages(): void {
     const now = Date.now();
-    for(let entry of this.messageHandlers){
+    for (let entry of this.messageHandlers) {
       const v = entry[1];
-      if(now - v.sent_at > this.MESSAGE_TIMEOUT_MS && v.rejecter !== undefined){
+      if (
+        now - v.sent_at > this.MESSAGE_TIMEOUT_MS &&
+        v.rejecter !== undefined
+      ) {
         v.rejecter(new Error("Message timed-out"));
         v.rejecter = undefined;
         this.messageHandlers.delete(entry[0]);

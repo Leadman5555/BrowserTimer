@@ -175,9 +175,7 @@ async function handleTabRemoval(
 chrome.runtime.onMessage.addListener(
   async (message: Message, _, sendResponse) => {
     if (!nativeMessaging.isConnected()) {
-      alert(
-        "No connection to native host. Make sure it is running. Check error logs for details if any."
-      );
+      logError("No connection to native host. Make sure it is running. Check error logs for details if any.");
       sendResponse(undefined);
       return false;
     }
