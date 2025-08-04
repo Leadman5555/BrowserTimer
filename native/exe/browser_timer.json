@@ -1,0 +1,9 @@
+{
+  "name": "browser_timer",
+  "description": "Browser Timer Native Messaging Host",
+  "path": "C:\\Users\\Ignac\\Desktop\\rest\\BrowserTimer\\native\\exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://YOUR_EXTENSION_ID_HERE/"
+  ]
+}

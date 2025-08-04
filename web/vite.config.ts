@@ -13,6 +13,7 @@ export default defineConfig({
             input: {
                 popup: resolve(__dirname, 'src/popup/popup.html'),
                 background: resolve(__dirname, 'src/background.ts'),
+                connection_service: resolve(__dirname, 'src/connection_service.ts'),
                 result_view: resolve(__dirname, 'src/result_view/result_view.tsx')
             },
             output: {

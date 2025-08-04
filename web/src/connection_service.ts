@@ -78,7 +78,7 @@ export type NativeMessageHandler = (response: NativeResponse) => void;
 export class NativeMessagingService {
   private static instance: NativeMessagingService;
   private port: chrome.runtime.Port | null = null;
-  private readonly hostName = "browser_timer"; // Ttodo
+  private readonly hostName = "browser_timer";
   private messageHandlers: Map<
     string,
     {
