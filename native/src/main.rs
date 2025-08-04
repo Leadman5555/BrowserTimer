@@ -4,6 +4,7 @@ mod tracker;
 
 fn main() {
     eprintln!("Native messaging host starting...");
+
     let loader = session_loader::SessionLoader::with_default_directory();
     if let Ok(session_loader) = loader {
         eprintln!(

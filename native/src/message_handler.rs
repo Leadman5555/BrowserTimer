@@ -147,6 +147,26 @@ impl NativeMessagingHost {
         Ok(())
     }
     pub fn run(&mut self) {
+        static mut TRACKER_PTR: Option<*mut Option<Tracker>> = None;
+        static mut SESSION_LOADER_PTR: Option<*const SessionLoader> = None;
+
+        unsafe {
+            TRACKER_PTR = Some(&mut self.tracker as *mut _);
+            SESSION_LOADER_PTR = Some(&self.session_loader as *const _);
+        }
+
+        ctrlc::set_handler(|| {
+            unsafe {
+                if let (Some(tracker_ptr), Some(loader_ptr)) = (TRACKER_PTR, SESSION_LOADER_PTR) {
+                    if let Some(mut tracker) = (*tracker_ptr).take() {
+                        let serialized = tracker.serialize_session(true);
+                        let _ = (*loader_ptr).save_session(&serialized);
+                    }
+                }
+            }
+            std::process::exit(0);
+        }).expect("Error setting Ctrl-C handler");
+
         loop {
             match self.read_message() {
                 Ok(message) => {
@@ -157,19 +177,19 @@ impl NativeMessagingHost {
                     }
                 }
                 Err(NativeMessagingError::Io(ref e))
-                if e.kind() == io::ErrorKind::UnexpectedEof =>
-                    {
-                        if let Some(mut tracker) = self.tracker.take() {
-                            if let Err(e) = self
-                                .session_loader
-                                .save_session(&tracker.serialize_session(false))
-                            {
-                                eprintln!("Failed to save session: {}", e);
-                            }
+                    if e.kind() == io::ErrorKind::UnexpectedEof =>
+                {
+                    if let Some(mut tracker) = self.tracker.take() {
+                        if let Err(e) = self
+                            .session_loader
+                            .save_session(&tracker.serialize_session(false))
+                        {
+                            eprintln!("Failed to save session: {}", e);
                         }
-                        eprintln!("Connection closed");
-                        return;
                     }
+                    eprintln!("Connection closed");
+                    return;
+                }
                 Err(e) => {
                     eprintln!("Error reading message: {}", e);
                     let _ = self.send_message(&OutgoingMessage::error(e.to_string()));
@@ -314,7 +334,7 @@ impl NativeMessagingHost {
             let serialized = tracker.serialize_session(true);
             Ok(serialized)
         })
-            .map_success(|data| serde_json::json!(data))
+        .map_success(|data| serde_json::json!(data))
     }
 
     fn handle_start_action(&mut self, session_name: &str) -> OutgoingMessage {
