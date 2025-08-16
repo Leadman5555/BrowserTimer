@@ -16,6 +16,7 @@ export const Action = {
   TAB_CLOSED: 8,
   GET_SESSIONS: 9,
   DELETE_SESSION: 10,
+  BACKUP_SESSION: 11,
 } as const;
 
 export type Action = (typeof Action)[keyof typeof Action];
@@ -111,7 +112,7 @@ async function handleTabActivation(activeInfo: chrome.tabs.TabActiveInfo) {
     if (tab.url !== undefined) {
       knownTabs.set(tabId, tab.url);
       await sendNativeAndLogError(
-        MessageBuilder.tabUnfocused({ url: tab.url, tab_id: tabId })
+        MessageBuilder.tabFocused({ url: tab.url, tab_id: tabId })
       );
     } else {
       console.log(`Tab ${tabId} activated with no URL yet`);
@@ -131,7 +132,7 @@ async function handleTabUpdate(
     if (oldUrl !== undefined && oldUrl !== changeInfo.url) {
       // URL changed
       await sendNativeAndLogError(
-        MessageBuilder.tabUnfocused({ url: oldUrl, tab_id: tabId })
+        MessageBuilder.tabClosed({ url: oldUrl, tab_id: tabId })
       );
     }
     knownTabs.set(tabId, changeInfo.url);
@@ -202,6 +203,11 @@ function handleMessage(message: Message): Promise<NativeResponse> {
     case Action.DELETE_SESSION: {
       return nativeMessaging.sendMessage(
         MessageBuilder.deleteSession(message.body.sessionName)
+      );
+    }
+    case Action.BACKUP_SESSION: {
+      return nativeMessaging.sendMessage(
+        MessageBuilder.backupSession(message.body.sessionName)
       );
     }
     default: {

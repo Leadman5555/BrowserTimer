@@ -34,7 +34,6 @@ export default function Popup() {
 
   const refreshSessions = async () => {
     const result = await sendMessageToWorker(Action.GET_ACTIVE);
-    console.log("active", result);
     if (!result.success) {
       alert("Failed to fetch data from the host: " + result.error);
     } else {
@@ -50,7 +49,6 @@ export default function Popup() {
 
   const listSessions = async () => {
     const result = await sendMessageToWorker(Action.GET_SESSIONS);
-    console.log("list", result);
     if (!result.success) {
       alert("Failed to list saved sessions: " + result.error);
     } else {
@@ -65,9 +63,39 @@ export default function Popup() {
       const result = await sendMessageToWorker(Action.START, {
         sessionName: selectedSession,
       });
-      console.log("load", result);
       if (!result.success) alert("Failed to load the session: " + result.error);
       else setCurrentSession(selectedSession);
+    }
+  };
+
+  const deleteSession = async () => {
+    if (selectedSession && selectedSession.length > 0) {
+      const result = await sendMessageToWorker(Action.DELETE_SESSION, {
+        sessionName: selectedSession,
+      });
+      if (!result.success)
+        alert("Failed to delete the session: " + result.error);
+      else {
+        alert(`Session ${selectedSession} removed`);
+        setSelectedSession("");
+        await listSessions();
+      }
+    }
+  };
+
+  const backupSession = async () => {
+    if (selectedSession && selectedSession.length > 0) {
+      const result = await sendMessageToWorker(Action.BACKUP_SESSION, {
+        sessionName: selectedSession,
+      });
+      if (!result.success)
+        alert("Failed to backup the session: " + result.error);
+      else {
+        alert(
+          `Created a copy of session ${selectedSession} under path: ` +
+            (result as SuccessNativeResponseWithData).data.path
+        );
+      }
     }
   };
 
@@ -77,7 +105,6 @@ export default function Popup() {
       const result = await sendMessageToWorker(Action.START, {
         sessionName: name,
       });
-      console.log("create", result);
       if (!result.success) alert("Failed to load the session: " + result.error);
       else {
         setCurrentSession(name);
@@ -88,7 +115,6 @@ export default function Popup() {
 
   const stopSession = async () => {
     const result = await sendMessageToWorker(Action.STOP);
-    console.log("stop", result);
     if (!result.success) alert("Failed to stop the session: " + result.error);
     else {
       await listSessions();
@@ -98,7 +124,6 @@ export default function Popup() {
 
   const displayActiveSessionStats = async () => {
     const result = await sendMessageToWorker(Action.GET_DATA);
-    console.log("data", result);
     if (!result.success) {
       alert("Failed to fetch the session data: " + result.error);
       setSessionData(undefined);
@@ -110,54 +135,280 @@ export default function Popup() {
   };
 
   return (
-    <div style={{ padding: "1rem", width: "250px" }}>
+    <div style={styles.container}>
       {currentSession ? (
-        <div id="ifAny">
-          <h4>Current session:</h4>
-          <p id="currentSession">{currentSession}</p>
-          <button onClick={stopSession}>Stop Session</button>
-          <button
-            onClick={async (_) => {
-              if (resultsShowing) {
-                setResultsShowing(false);
-                setSessionData(undefined);
-              } else {
-                await displayActiveSessionStats();
-              }
-            }}
-          >
-            Toggle results
-          </button>
-          {resultsShowing && <Results data={sessionData} />}
+        <div style={styles.sessionContainer}>
+          <div style={styles.header}>
+            <h2 style={styles.title}>Active Session</h2>
+            <div style={styles.sessionCard}>
+              <div style={styles.sessionInfo}>
+                <span style={styles.sessionLabel}>Current Session</span>
+                <span style={styles.sessionName}>{currentSession}</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.buttonGroup}>
+            <button className="primary-button" onClick={stopSession}>
+              Stop Session
+            </button>
+            <button
+              className="secondary-button"
+              onClick={async (_) => {
+                if (resultsShowing) {
+                  setResultsShowing(false);
+                  setSessionData(undefined);
+                } else {
+                  await displayActiveSessionStats();
+                }
+              }}
+            >
+              {resultsShowing ? "Hide Results" : "Show Results"}
+            </button>
+          </div>
+
+          {resultsShowing && (
+            <div>
+              <Results data={sessionData} />
+            </div>
+          )}
         </div>
       ) : (
-        <div id="ifNone">
-          <h4>Start new session</h4>
-          <input
-            type="text"
-            placeholder="Session name"
-            value={newSessionName}
-            onChange={(e) => setNewSessionName(e.target.value)}
-          />
-          <button onClick={createSession}>Create</button>
+        <div style={styles.setupContainer}>
+          <div style={styles.header}>
+            <h2 style={styles.title}>Browser Timer</h2>
+            <p style={styles.subtitle}>
+              Create a new session or load an existing one to start tracking.
+            </p>
+          </div>
 
-          <h4>Or load existing:</h4>
-          <select
-            value={selectedSession}
-            onChange={(e) => setSelectedSession(e.target.value)}
-          >
-            <option value="">-- Select Session --</option>
-            {sessions.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <button onClick={loadSession} disabled={!selectedSession}>
-            Load
-          </button>
+          <div style={styles.sectionCard}>
+            <h3 style={styles.sectionTitle}>
+              <span style={styles.sectionIcon}>➕</span>
+              Start New Session
+            </h3>
+            <div style={styles.inputGroup}>
+              <input
+                type="text"
+                placeholder="Enter session name"
+                value={newSessionName}
+                onChange={(e) => setNewSessionName(e.target.value)}
+                style={styles.input}
+              />
+              <button
+                onClick={createSession}
+                className="primary-button"
+                disabled={!newSessionName.trim()}
+              >
+                <span style={styles.buttonIcon}>🚀</span>
+                Create Session
+              </button>
+            </div>
+          </div>
+
+          <div style={styles.sectionCard}>
+            <h3 style={styles.sectionTitle}>
+              <span style={styles.sectionIcon}>📂</span>
+              Load Existing Session
+            </h3>
+            <div style={styles.inputGroup}>
+              <select
+                value={selectedSession}
+                onChange={(e) => setSelectedSession(e.target.value)}
+                style={styles.select}
+              >
+                <option value="">-- Select Session --</option>
+                {sessions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={loadSession}
+                disabled={!selectedSession}
+                className="primary-button"
+              >
+                <span style={styles.buttonIcon}>📁</span>
+                Load
+              </button>
+              <button
+                onClick={backupSession}
+                disabled={!selectedSession}
+                style={{ backgroundColor: "#58eb93b0" }}
+                className="primary-button"
+              >
+                💾
+              </button>
+              <button
+                onClick={deleteSession}
+                disabled={!selectedSession}
+                style={{ backgroundColor: "#E91E63" }}
+                className="primary-button"
+              >
+                🗑
+              </button>
+            </div>
+            {sessions.length === 0 && (
+              <p style={styles.emptyMessage}>No saved sessions available.</p>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
+const styles = {
+  container: {
+    padding: "20px",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    backgroundColor: "#f8fafc",
+    maxWidth: "800px",
+    minWidth: "520px",
+    margin: "0 auto",
+  },
+
+  header: {
+    textAlign: "center" as const,
+  },
+
+  title: {
+    fontSize: "28px",
+    fontWeight: "700",
+    color: "#1e293b",
+    margin: "0 0 10px 0",
+  },
+
+  subtitle: {
+    fontSize: "16px",
+    color: "#64748b",
+    margin: "0",
+  },
+
+  sessionContainer: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "30px",
+  },
+
+  sessionCard: {
+    backgroundColor: "white",
+    borderRadius: "12px",
+    padding: "20px",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    border: "1px solid #e2e8f0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "16px",
+    maxWidth: "400px",
+    margin: "0 auto",
+  },
+
+  sessionIcon: {
+    fontSize: "24px",
+    padding: "12px",
+    backgroundColor: "#eef2ff",
+    borderRadius: "8px",
+  },
+
+  sessionInfo: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "4px",
+  },
+
+  sessionLabel: {
+    fontSize: "14px",
+    color: "#64748b",
+    fontWeight: "500",
+  },
+
+  sessionName: {
+    fontSize: "18px",
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+
+  buttonGroup: {
+    display: "flex",
+    gap: "16px",
+    justifyContent: "center",
+    flexWrap: "wrap" as const,
+  },
+
+  setupContainer: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "24px",
+  },
+
+  sectionCard: {
+    backgroundColor: "white",
+    borderRadius: "12px",
+    padding: "24px",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    border: "1px solid #e2e8f0",
+  },
+
+  sectionTitle: {
+    fontSize: "20px",
+    fontWeight: "600",
+    color: "#1e293b",
+    margin: "0 0 16px 0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
+  },
+
+  sectionIcon: {
+    fontSize: "20px",
+  },
+
+  inputGroup: {
+    display: "flex",
+    gap: "12px",
+    flexWrap: "wrap" as const,
+  },
+
+  input: {
+    flex: "1",
+    minWidth: "200px",
+    padding: "12px 16px",
+    border: "1px solid #d1d5db",
+    borderRadius: "8px",
+    fontSize: "16px",
+    fontFamily: "inherit",
+    backgroundColor: "white",
+    transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+    outline: "none",
+  },
+
+  select: {
+    flex: "1",
+    maxWidth: "200px",
+    textOverflow: "ellipsis",
+    padding: "12px 16px",
+    border: "1px solid #d1d5db",
+    borderRadius: "8px",
+    fontSize: "16px",
+    fontFamily: "inherit",
+    backgroundColor: "white",
+    cursor: "pointer",
+    outline: "none",
+  },
+
+  buttonIcon: {
+    fontSize: "16px",
+  },
+
+  emptyMessage: {
+    fontSize: "14px",
+    color: "#64748b",
+    fontStyle: "italic",
+    marginTop: "12px",
+    margin: "12px 0 0 0",
+  },
+};

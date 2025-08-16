@@ -80,7 +80,7 @@ impl SessionLoader {
         if session.session_name != session_name {
             return Err(PersistenceError::JsonSerialization(
                 serde_json::Error::custom(format!(
-                    "Session name mismatch: expected '{}', found '{}'",
+                    "Session name mismatch: expected '{}', found '{}'. If loading from a backup, rename the file to match the session name.",
                     session_name, session.session_name
                 )),
             ));

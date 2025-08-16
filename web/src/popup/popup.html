@@ -3,6 +3,63 @@
   <head>
     <title>Browser tracker</title>
     <meta charset="UTF-8" />
+    <style>
+      input:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      .primary-button:disabled {
+        padding: 12px 20px;
+        background-color: #f1f5f9 !important;
+        color: #94a3b8;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: not-allowed;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+
+      button:enabled:hover {
+        box-shadow: #c9cee7 2px 4px 5px;
+      }
+
+      .secondary-button {
+        padding: 12px 20px;
+        background-color: white;
+        color: #6366f1;
+        border: 1px solid #6366f1;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease, transform 0.1s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+
+      .primary-button {
+        padding: 12px 20px;
+        background-color: #6366f1;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease, transform 0.1s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

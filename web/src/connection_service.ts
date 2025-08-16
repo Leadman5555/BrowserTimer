@@ -43,6 +43,11 @@ export const MessageBuilder = {
     action: "DeleteSession",
     data: { session_name },
   }),
+
+  backupSession: (session_name: string): NativeMessage => ({
+    action: "BackupSession",
+    data: { session_name },
+  }),
 };
 
 export interface TabActionData {
@@ -60,7 +65,8 @@ export type NativeMessage =
   | { action: "GetActive" }
   | { action: "Ping" }
   | { action: "GetSessions" }
-  | { action: "DeleteSession"; data: { session_name: string } };
+  | { action: "DeleteSession"; data: { session_name: string } }
+  | { action: "BackupSession"; data: { session_name: string } };
 
 export type SuccessNativeResponse = {
   success: true;
