@@ -52,7 +52,6 @@ impl Logger {
     pub fn error(&self, message: &str) {
         self.log_or_console(&format!("ERROR: {}", message))
     }
-
     pub fn debug(&self, message: &str) {
         self.log_or_console(&format!("DEBUG: {}", message))
     }

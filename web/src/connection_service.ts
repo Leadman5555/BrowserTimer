@@ -62,16 +62,23 @@ export type NativeMessage =
   | { action: "GetSessions" }
   | { action: "DeleteSession"; data: { session_name: string } };
 
-export interface SuccessfulNativeResponse {
-  data?: any;
+export type SuccessNativeResponse = {
   success: true;
-}
+  data: Record<string, unknown> | null;
+};
 
-export interface NativeResponse {
-  success: boolean;
-  data?: any;
-  error?: string;
-}
+export type FailureNativeResponse = {
+  success: false;
+  error: string | null;
+};
+
+export type NativeResponse = SuccessNativeResponse | FailureNativeResponse;
+export type SuccessNativeResponseWithData = Omit<
+  SuccessNativeResponse,
+  "data"
+> & {
+  data: Record<string, unknown>;
+};
 
 export type NativeMessageHandler = (response: NativeResponse) => void;
 
@@ -80,7 +87,7 @@ export class NativeMessagingService {
   private port: chrome.runtime.Port | null = null;
   private readonly hostName = "browser_timer";
   private messageHandlers: Map<
-    string,
+    number,
     {
       handler: NativeMessageHandler;
       sent_at: number;
@@ -144,26 +151,20 @@ export class NativeMessagingService {
     });
   }
 
-  public sendMessage(
-    message: NativeMessage
-  ): Promise<SuccessfulNativeResponse> {
+  public sendMessage(message: NativeMessage): Promise<NativeResponse> {
     return new Promise((resolve, reject) => {
       if (!this.port) {
         reject(new Error("Not connected to native host"));
         return;
       }
 
-      const messageId = (++this.messageId).toString();
+      const messageId = ++this.messageId;
       const messageWithId = { ...message, id: messageId };
 
       this.messageHandlers.set(messageId, {
         handler: (response: NativeResponse) => {
           this.messageHandlers.delete(messageId);
-          if (response.success) {
-            resolve(response as SuccessfulNativeResponse);
-          } else {
-            reject(new Error(response.error || "Unknown error"));
-          }
+          resolve(response);
         },
         sent_at: Date.now(),
         rejecter: reject,
@@ -178,7 +179,7 @@ export class NativeMessagingService {
     });
   }
 
-  private handleMessage(response: NativeResponse & { id?: string }) {
+  private handleMessage(response: NativeResponse & { id?: number }) {
     if (response.id && this.messageHandlers.has(response.id)) {
       const handler = this.messageHandlers.get(response.id)!;
       if (Date.now() - handler.sent_at > this.MESSAGE_TIMEOUT_MS) {

@@ -18,7 +18,7 @@ fn main() {
             )
             .as_str(),
         );
-        let mut host = message_handler::NativeMessagingHost::new(session_loader);
+        let mut host = message_handler::NativeMessagingHost::new(session_loader, &logger);
         host.run();
     } else {
         logger.error(

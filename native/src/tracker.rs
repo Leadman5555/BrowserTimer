@@ -332,10 +332,10 @@ impl Tracker {
         Ok(())
     }
 
-    fn collect_tracking_data(&mut self, current_time: u64) -> Vec<TrackingData> {
+    pub fn collect_tracking_data(&mut self) -> Vec<TrackingData> {
         let mut result = Vec::new();
-        let mut path_buffer = String::with_capacity(256); // Pre-allocate reasonable size
-        Tracker::collect_recursive(&mut result, current_time, &mut path_buffer, &mut self.root);
+        let mut path_buffer = String::with_capacity(256);
+        Tracker::collect_recursive(&mut result, Self::current_timestamp(), &mut path_buffer, &mut self.root);
         result
     }
 
@@ -366,12 +366,6 @@ impl Tracker {
             Tracker::collect_recursive(result, current_time, path_buffer, &mut node.children);
             path_buffer.truncate(original_len);
         }
-    }
-
-    pub fn get_tracking_data(&mut self) -> Vec<TrackingData> {
-        let current_time = Self::current_timestamp();
-        let result = self.collect_tracking_data(current_time);
-        result
     }
 
     pub fn serialize_session(&mut self, include_tabs: bool) -> SerializedSession {
@@ -579,7 +573,7 @@ mod tests {
         tracker
             .track_tab_closed("https://example.com/path1", 1)
             .unwrap();
-        let tracking_data = tracker.get_tracking_data();
+        let tracking_data = tracker.collect_tracking_data();
 
         assert!(!tracking_data.is_empty());
 

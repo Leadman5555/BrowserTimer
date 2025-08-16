@@ -1,3 +1,4 @@
+use crate::logger::Logger;
 use crate::session_loader::{PersistenceError, SessionLoader};
 use crate::tracker::{Tracker, TrackerError};
 use serde::{Deserialize, Serialize};
@@ -34,7 +35,6 @@ pub enum NativeMessagingError {
 }
 
 const TRACKER_NOT_STARTED: &str = "Tracker not started";
-const TRACKER_ALREADY_STARTED: &str = "Tracker already started";
 
 #[derive(Debug, Deserialize)]
 pub(crate) enum Action {
@@ -127,22 +127,24 @@ impl OutgoingMessage {
     }
 }
 
-pub(crate) struct NativeMessagingHost {
+pub(crate) struct NativeMessagingHost<'lifetime> {
     stdin: io::Stdin,
     stdout: io::Stdout,
     tracker: Option<Tracker>,
     session_loader: SessionLoader,
     read_buffer: Vec<u8>,
+    logger: &'lifetime Logger,
 }
 
-impl NativeMessagingHost {
-    pub fn new(session_loader: SessionLoader) -> Self {
+impl<'lifetime> NativeMessagingHost<'lifetime> {
+    pub fn new(session_loader: SessionLoader, logger: &'lifetime Logger) -> Self {
         Self {
             stdin: io::stdin(),
             stdout: io::stdout(),
             tracker: None,
             session_loader,
             read_buffer: Vec::new(),
+            logger,
         }
     }
 
@@ -152,7 +154,6 @@ impl NativeMessagingHost {
         let mut length_bytes = [0u8; 4];
         self.stdin.read_exact(&mut length_bytes)?;
         let length = u32::from_le_bytes(length_bytes);
-
         if length > NativeMessagingHost::MAX_MESSAGE_SIZE {
             return Err(NativeMessagingError::MessageTooLarge(length));
         }
@@ -188,7 +189,7 @@ impl NativeMessagingHost {
             SESSION_LOADER_PTR = Some(&self.session_loader as *const _);
         }
 
-        ctrlc::set_handler(|| {
+        let _ = ctrlc::set_handler(|| {
             unsafe {
                 if let (Some(tracker_ptr), Some(loader_ptr)) = (TRACKER_PTR, SESSION_LOADER_PTR) {
                     if let Some(mut tracker) = (*tracker_ptr).take() {
@@ -199,14 +200,17 @@ impl NativeMessagingHost {
             }
             std::process::exit(0);
         })
-        .expect("Error setting Ctrl-C handler");
+        .map_err(|e| {
+            self.logger
+                .error(format!("Failed to set ctrl-c handler: {}", e).as_str())
+        });
 
         loop {
             match self.read_message() {
                 Ok(message) => {
                     let response = self.handle_message(message.message);
                     if let Err(e) = self.send_message(&response.with_id(message.id)) {
-                        eprintln!("Failed to send response: {}", e);
+                        self.logger.error(format!("Failed to send response: {}", e).as_str());
                         break;
                     }
                 }
@@ -218,14 +222,14 @@ impl NativeMessagingHost {
                             .session_loader
                             .save_session(&tracker.serialize_session(false))
                         {
-                            eprintln!("Failed to save session: {}", e);
+                            self.logger.error(format!("Failed to save session: {}", e).as_str());
                         }
                     }
-                    eprintln!("Connection closed");
+                    self.logger.info("Connection closed");
                     return;
                 }
                 Err(e) => {
-                    eprintln!("Error reading message: {}", e);
+                    self.logger.error(format!("Error reading message: {}", e).as_str());
                     let _ = self.send_message(&OutgoingMessage::error(e.to_string()).with_id(0));
                     break;
                 }
@@ -306,7 +310,7 @@ impl NativeMessagingHost {
     }
     fn handle_session_listing(&self) -> OutgoingMessage {
         match self.session_loader.list_sessions() {
-            Ok(sessions) => OutgoingMessage::success(Some(serde_json::json!(sessions))),
+            Ok(sessions) => OutgoingMessage::success(Some(serde_json::json!({"sessions": sessions}))),
             Err(e) => OutgoingMessage::error(e.to_string()),
         }
     }
@@ -345,6 +349,7 @@ impl NativeMessagingHost {
                 {
                     Ok(_) => {
                         self.tracker = None;
+                        self.logger.info("Session stopped");
                         OutgoingMessage::success(None)
                     }
                     Err(e) => OutgoingMessage::error(e.to_string()),
@@ -365,22 +370,24 @@ impl NativeMessagingHost {
 
     fn handle_get_data_action(&mut self) -> OutgoingMessage {
         self.with_tracker_mut(|tracker| {
-            let serialized = tracker.serialize_session(true);
-            Ok(serialized)
+            Ok(tracker.collect_tracking_data())
         })
-        .map_success(|data| serde_json::json!(data))
+        .map_success(|data| serde_json::json!({"data": data}))
     }
 
     fn handle_start_action(&mut self, session_name: &str) -> OutgoingMessage {
         match self.try_start_action(session_name) {
-            Ok(()) => OutgoingMessage::success(None),
+            Ok(()) => {
+                self.logger.info(format!("Started session {}", session_name).as_str());
+                OutgoingMessage::success(None)
+            },
             Err(e) => OutgoingMessage::error(e),
         }
     }
 
     fn try_start_action(&mut self, session_name: &str) -> Result<(), String> {
         if self.tracker.is_some() {
-            return Err(TRACKER_ALREADY_STARTED.to_string());
+            return Err("Tracker already started".to_string());
         }
         Self::verify_session_name(session_name).map_err_to_string()?;
         self.tracker = Some(

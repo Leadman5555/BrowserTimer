@@ -86,19 +86,7 @@ async function sendNativeAndLogError(message: NativeMessage) {
   try {
     await nativeMessaging.sendMessage(message);
   } catch (e) {
-    logError(`Native message send failed: ${e}`);
-  }
-}
-
-async function sendNativeWithResponse(
-  message: NativeMessage,
-  response: (body: NativeResponse | Error) => void
-) {
-  try {
-    const res = await nativeMessaging.sendMessage(message);
-    response(res);
-  } catch (e) {
-    response(e as Error);
+    logError(`Native message send failed: ${(e as Error).message}`);
   }
 }
 
@@ -173,48 +161,54 @@ async function handleTabRemoval(
 }
 
 chrome.runtime.onMessage.addListener(
-  async (message: Message, _, sendResponse) => {
+  (message: Message, _, sendResponse: (result: NativeResponse) => void) => {
     if (!nativeMessaging.isConnected()) {
-      logError("No connection to native host. Make sure it is running. Check error logs for details if any.");
-      sendResponse(undefined);
+      logError(
+        "No connection to native host. Make sure it is running. Check error logs for details if any."
+      );
+      sendResponse({
+        success: false,
+        error:
+          "No connection to native host. Make sure it is running. Check error logs for details if any.",
+      });
       return false;
     }
-    switch (message.action) {
-      case Action.GET_DATA: {
-        void sendNativeWithResponse(MessageBuilder.getData(), sendResponse);
-        return true;
-      }
-      case Action.START: {
-        void sendNativeWithResponse(
-          MessageBuilder.start(message.body.sessionName),
-          sendResponse
-        );
-        return true;
-      }
-      case Action.STOP: {
-        void sendNativeWithResponse(MessageBuilder.stop(), sendResponse);
-        return true;
-      }
-      case Action.GET_ACTIVE: {
-        void sendNativeWithResponse(MessageBuilder.getActive(), sendResponse);
-        return true;
-      }
-      case Action.GET_SESSIONS: {
-        void sendNativeWithResponse(MessageBuilder.getSessions(), sendResponse);
-        return true;
-      }
-      case Action.DELETE_SESSION: {
-        void sendNativeWithResponse(
-          MessageBuilder.deleteSession(message.body.sessionName),
-          sendResponse
-        );
-        return true;
-      }
-      default: {
-        logError(`Unsupported message received in handler: ${message.action}`);
-        sendResponse(undefined);
-        return false;
-      }
-    }
+    void handleMessage(message)
+      .then((res) => sendResponse(res))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
   }
 );
+
+function handleMessage(message: Message): Promise<NativeResponse> {
+  switch (message.action) {
+    case Action.GET_DATA: {
+      return nativeMessaging.sendMessage(MessageBuilder.getData());
+    }
+    case Action.START: {
+      return nativeMessaging.sendMessage(
+        MessageBuilder.start(message.body.sessionName)
+      );
+    }
+    case Action.STOP: {
+      return nativeMessaging.sendMessage(MessageBuilder.stop());
+    }
+    case Action.GET_ACTIVE: {
+      return nativeMessaging.sendMessage(MessageBuilder.getActive());
+    }
+    case Action.GET_SESSIONS: {
+      return nativeMessaging.sendMessage(MessageBuilder.getSessions());
+    }
+    case Action.DELETE_SESSION: {
+      return nativeMessaging.sendMessage(
+        MessageBuilder.deleteSession(message.body.sessionName)
+      );
+    }
+    default: {
+      logError(`Unsupported message received in handler: ${message.action}`);
+      throw new Error(
+        `Unsupported message received in handler: ${message.action}`
+      );
+    }
+  }
+}
