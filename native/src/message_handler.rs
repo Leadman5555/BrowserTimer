@@ -2,6 +2,7 @@ use crate::logger::Logger;
 use crate::session_loader::{PersistenceError, SessionLoader};
 use crate::tracker::{Tracker, TrackerError};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::io::{self, Read, Write};
 use thiserror::Error;
 
@@ -173,6 +174,8 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
         message: &OutgoingMessageWithId,
     ) -> Result<(), NativeMessagingError> {
         let json = serde_json::to_string(message)?;
+        self.logger
+            .debug(format!("Sending message: {}", json).as_str()); //todo
         let json_bytes = json.as_bytes();
         let length = json_bytes.len() as u32;
         self.stdout.write_all(&length.to_le_bytes())?;
@@ -210,7 +213,8 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
                 Ok(message) => {
                     let response = self.handle_message(message.message);
                     if let Err(e) = self.send_message(&response.with_id(message.id)) {
-                        self.logger.error(format!("Failed to send response: {}", e).as_str());
+                        self.logger
+                            .error(format!("Failed to send response: {}", e).as_str());
                         break;
                     }
                 }
@@ -222,14 +226,16 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
                             .session_loader
                             .save_session(&tracker.serialize_session(false))
                         {
-                            self.logger.error(format!("Failed to save session: {}", e).as_str());
+                            self.logger
+                                .error(format!("Failed to save session: {}", e).as_str());
                         }
                     }
                     self.logger.info("Connection closed");
                     return;
                 }
                 Err(e) => {
-                    self.logger.error(format!("Error reading message: {}", e).as_str());
+                    self.logger
+                        .error(format!("Error reading message: {}", e).as_str());
                     let _ = self.send_message(&OutgoingMessage::error(e.to_string()).with_id(0));
                     break;
                 }
@@ -258,6 +264,8 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
     }
 
     fn handle_message(&mut self, message: IncomingMessage) -> OutgoingMessage {
+        self.logger
+            .debug(format!("Received message: {:?}", message).as_str()); //todo
         match message {
             IncomingMessage::TabFocused(data) => {
                 self.handle_tab_operation(TabOperation::Focus, data)
@@ -310,17 +318,33 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
     }
     fn handle_session_listing(&self) -> OutgoingMessage {
         match self.session_loader.list_sessions() {
-            Ok(sessions) => OutgoingMessage::success(Some(serde_json::json!({"sessions": sessions}))),
+            Ok(sessions) => {
+                OutgoingMessage::success(Some(serde_json::json!({"sessions": sessions})))
+            }
             Err(e) => OutgoingMessage::error(e.to_string()),
         }
     }
-    fn with_tracker_mut<F, T>(&mut self, f: F) -> OutgoingMessage
+    fn with_tracker_mut_empty<F, T>(&mut self, f: F) -> OutgoingMessage
     where
         F: FnOnce(&mut Tracker) -> Result<T, HandlerError>,
     {
         match self.tracker.as_mut() {
             Some(tracker) => match f(tracker) {
                 Ok(_) => OutgoingMessage::success(None),
+                Err(e) => OutgoingMessage::error(e.to_string()),
+            },
+            None => OutgoingMessage::error(TRACKER_NOT_STARTED.to_string()),
+        }
+    }
+
+    fn with_tracker_mut<F, T, M>(&mut self, f: F, mapper: M) -> OutgoingMessage
+    where
+        F: FnOnce(&mut Tracker) -> Result<T, HandlerError>,
+        M: FnOnce(T) -> Value,
+    {
+        match self.tracker.as_mut() {
+            Some(tracker) => match f(tracker) {
+                Ok(res) => OutgoingMessage::success(Some(mapper(res))),
                 Err(e) => OutgoingMessage::error(e.to_string()),
             },
             None => OutgoingMessage::error(TRACKER_NOT_STARTED.to_string()),
@@ -369,18 +393,19 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
     }
 
     fn handle_get_data_action(&mut self) -> OutgoingMessage {
-        self.with_tracker_mut(|tracker| {
-            Ok(tracker.collect_tracking_data())
-        })
-        .map_success(|data| serde_json::json!({"data": data}))
+        self.with_tracker_mut(
+            |tracker| Ok(tracker.collect_tracking_data()),
+            |data| serde_json::json!({"data": data}),
+        )
     }
 
     fn handle_start_action(&mut self, session_name: &str) -> OutgoingMessage {
         match self.try_start_action(session_name) {
             Ok(()) => {
-                self.logger.info(format!("Started session {}", session_name).as_str());
+                self.logger
+                    .info(format!("Started session {}", session_name).as_str());
                 OutgoingMessage::success(None)
-            },
+            }
             Err(e) => OutgoingMessage::error(e),
         }
     }
@@ -397,27 +422,6 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
         Ok(())
     }
 }
-
-trait OutgoingMessageExt {
-    fn map_success<F, T>(self, f: F) -> Self
-    where
-        F: FnOnce(()) -> T,
-        T: serde::Serialize;
-}
-
-impl OutgoingMessageExt for OutgoingMessage {
-    fn map_success<F, T>(self, _: F) -> Self
-    where
-        F: FnOnce(()) -> T,
-        T: serde::Serialize,
-    {
-        match self.data {
-            Some(data) => Self::success(Some(data)),
-            None => self,
-        }
-    }
-}
-
 trait ResultExt<T> {
     fn map_err_to_string(self) -> Result<T, String>;
 }

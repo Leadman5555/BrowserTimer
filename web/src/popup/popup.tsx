@@ -1,10 +1,29 @@
 import React, { useEffect, useState } from "react";
-import { Action } from "../background";
+import { Action, type TrackingData } from "../background";
 import Results from "../result_view/result_view.tsx";
+import type {
+  NativeResponse,
+  SuccessNativeResponseWithData,
+} from "../connection_service.ts";
+
+async function sendMessageToWorker(
+  action: Action,
+  body?: {
+    [key: string]: any;
+  }
+): Promise<NativeResponse> {
+  return await chrome.runtime.sendMessage({
+    action,
+    body,
+  });
+}
 
 export default function Popup() {
   const [sessions, setSessions] = useState<string[]>([]);
   const [currentSession, setCurrentSession] = useState<string | null>(null);
+  const [sessionData, setSessionData] = useState<TrackingData[] | undefined>(
+    undefined
+  );
   const [newSessionName, setNewSessionName] = useState("");
   const [selectedSession, setSelectedSession] = useState("");
   const [resultsShowing, setResultsShowing] = useState<boolean>(false);
@@ -13,63 +32,81 @@ export default function Popup() {
     refreshSessions();
   }, []);
 
-  const refreshSessions = () => {
-    chrome.runtime.sendMessage(
-      { action: Action.GET_ACTIVE },
-      (sessionName: string | undefined) => {
-        if (!sessionName) {
-          setCurrentSession(null);
-          chrome.storage.local.get(null, (data) =>
-            setSessions(Object.keys(data))
-          );
-        } else {
-          setCurrentSession(sessionName);
-        }
+  const refreshSessions = async () => {
+    const result = await sendMessageToWorker(Action.GET_ACTIVE);
+    console.log("active", result);
+    if (!result.success) {
+      alert("Failed to fetch data from the host: " + result.error);
+    } else {
+      if (result.data !== null) {
+        const current = result.data.session_name as string;
+        setCurrentSession(current);
+      } else {
+        // no current sessions, fetch all
+        await listSessions();
       }
-    );
+    }
+  };
+
+  const listSessions = async () => {
+    const result = await sendMessageToWorker(Action.GET_SESSIONS);
+    console.log("list", result);
+    if (!result.success) {
+      alert("Failed to list saved sessions: " + result.error);
+    } else {
+      const sessions = (result as SuccessNativeResponseWithData).data.sessions;
+      if (!sessions) setSessions([]);
+      else setSessions(sessions as string[]);
+    }
   };
 
   const loadSession = async () => {
     if (selectedSession && selectedSession.length > 0) {
-      await chrome.runtime.sendMessage(
-        {
-          action: Action.START,
-          body: { sessionName: selectedSession },
-        },
-        (result: boolean) => {
-          if (!result) alert("Failed to load the session");
-          refreshSessions();
-        }
-      );
+      const result = await sendMessageToWorker(Action.START, {
+        sessionName: selectedSession,
+      });
+      console.log("load", result);
+      if (!result.success) alert("Failed to load the session: " + result.error);
+      else setCurrentSession(selectedSession);
     }
   };
 
   const createSession = async () => {
     const name = newSessionName.trim();
     if (name.length > 0) {
-      await chrome.runtime.sendMessage(
-        {
-          action: Action.START,
-          body: { sessionName: name },
-        },
-        (result: boolean) => {
-          if (!result) alert("Failed to load the session");
-          else setNewSessionName("");
-          refreshSessions();
-        }
-      );
+      const result = await sendMessageToWorker(Action.START, {
+        sessionName: name,
+      });
+      console.log("create", result);
+      if (!result.success) alert("Failed to load the session: " + result.error);
+      else {
+        setCurrentSession(name);
+        setNewSessionName("");
+      }
     }
   };
 
   const stopSession = async () => {
-    await chrome.runtime.sendMessage(
-      { action: Action.STOP },
-      (result: boolean) => {
-        if (!result) alert("Failed to stop the session");
-        else setResultsShowing(false);
-        refreshSessions();
-      }
-    );
+    const result = await sendMessageToWorker(Action.STOP);
+    console.log("stop", result);
+    if (!result.success) alert("Failed to stop the session: " + result.error);
+    else {
+      await listSessions();
+      setCurrentSession(null);
+    }
+  };
+
+  const displayActiveSessionStats = async () => {
+    const result = await sendMessageToWorker(Action.GET_DATA);
+    console.log("data", result);
+    if (!result.success) {
+      alert("Failed to fetch the session data: " + result.error);
+      setSessionData(undefined);
+    } else {
+      const data = (result as SuccessNativeResponseWithData).data.data;
+      setSessionData(data as TrackingData[] | undefined);
+      setResultsShowing(true);
+    }
   };
 
   return (
@@ -79,10 +116,19 @@ export default function Popup() {
           <h4>Current session:</h4>
           <p id="currentSession">{currentSession}</p>
           <button onClick={stopSession}>Stop Session</button>
-          <button onClick={(_) => setResultsShowing(!resultsShowing)}>
+          <button
+            onClick={async (_) => {
+              if (resultsShowing) {
+                setResultsShowing(false);
+                setSessionData(undefined);
+              } else {
+                await displayActiveSessionStats();
+              }
+            }}
+          >
             Toggle results
           </button>
-          {resultsShowing && <Results />}
+          {resultsShowing && <Results data={sessionData} />}
         </div>
       ) : (
         <div id="ifNone">

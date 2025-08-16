@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { Action, type TrackingData } from "../background";
+import React from "react";
+import { type TrackingData } from "../background";
 
-export default function Results() {
-  const [data, setData] = useState<TrackingData[] | undefined>(undefined);
+interface ResultsProps {
+  data: TrackingData[] | undefined;
+}
 
+export default function Results({ data }: ResultsProps) {
   const formatTime = (ms: number) => {
     let tmp = ms / 1000;
     const seconds = Math.floor(tmp) % 60;
@@ -14,27 +16,11 @@ export default function Results() {
     return `${hours}h ${minutes}m ${seconds}s`;
   };
 
-  useEffect(() => {
-    chrome.runtime.sendMessage(
-      { action: Action.GET_DATA },
-      (response: TrackingData[] | undefined) => {
-        if (!chrome.runtime.lastError) {
-          setData(response);
-        } else {
-          console.error(
-            "Error fetching data:",
-            chrome.runtime.lastError.message
-          );
-        }
-      }
-    );
-  }, []);
-
   if (!data || data.length === 0) {
     return <div>No data yet.</div>;
   }
 
-  const sorted = [...data].sort((a, b) => b.aggregateTime - a.aggregateTime);
+  const sorted = [...data].sort((a, b) => b.aggregate_time - a.aggregate_time);
 
   return (
     <div id="results">
@@ -43,10 +29,10 @@ export default function Results() {
           <div className="path" style={{ fontWeight: "bold" }}>
             {entry.path}
           </div>
-          <div className="time">Time: {formatTime(entry.aggregateTime)}</div>
+          <div className="time">Time: {formatTime(entry.aggregate_time)}</div>
           <div className="instances">
-            Active/Tracked instances: {entry.activeInstances}/
-            {entry.totalInstances}
+            Active/Tracked instances: {entry.active_instances}/
+            {entry.total_instances}
           </div>
         </div>
       ))}

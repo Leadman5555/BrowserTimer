@@ -29,9 +29,9 @@ export interface Message {
 
 export interface TrackingData {
   path: string;
-  aggregateTime: number;
-  totalInstances: number;
-  activeInstances: number;
+  aggregate_time: number;
+  total_instances: number;
+  active_instances: number;
 }
 
 chrome.alarms.onAlarm.addListener((_) => {
