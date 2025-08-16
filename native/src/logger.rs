@@ -45,10 +45,6 @@ impl Logger {
         self.log_or_console(&format!("INFO: {}", message))
     }
 
-    pub fn warn(&self, message: &str) {
-        self.log_or_console(&format!("WARN: {}", message))
-    }
-
     pub fn error(&self, message: &str) {
         self.log_or_console(&format!("ERROR: {}", message))
     }
@@ -56,10 +52,6 @@ impl Logger {
         self.log_or_console(&format!("DEBUG: {}", message))
     }
     pub fn log_file_path(&self) -> &Path {
-        &self.log_file_path
-    }
-
-    pub fn get_log_file_path(&self) -> &PathBuf {
         &self.log_file_path
     }
 }

@@ -49,6 +49,7 @@ pub(crate) enum Action {
     TabClosed,
     GetSessions,
     DeleteSession,
+    BackupSession
 }
 
 #[derive(Debug)]
@@ -78,6 +79,7 @@ pub(crate) enum IncomingMessage {
     Ping,
     GetSessions,
     DeleteSession { session_name: String },
+    BackupSession { session_name: String }
 }
 
 #[derive(Debug, Serialize)]
@@ -174,8 +176,6 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
         message: &OutgoingMessageWithId,
     ) -> Result<(), NativeMessagingError> {
         let json = serde_json::to_string(message)?;
-        self.logger
-            .debug(format!("Sending message: {}", json).as_str()); //todo
         let json_bytes = json.as_bytes();
         let length = json_bytes.len() as u32;
         self.stdout.write_all(&length.to_le_bytes())?;
@@ -265,7 +265,7 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
 
     fn handle_message(&mut self, message: IncomingMessage) -> OutgoingMessage {
         self.logger
-            .debug(format!("Received message: {:?}", message).as_str()); //todo
+            .debug(format!("Received message: {:?}", message).as_str());
         match message {
             IncomingMessage::TabFocused(data) => {
                 self.handle_tab_operation(TabOperation::Focus, data)
@@ -285,6 +285,9 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
                 self.handle_session_deletion(&session_name)
             }
             IncomingMessage::Ping => OutgoingMessage::success(None),
+            IncomingMessage::BackupSession { session_name } => {
+                self.handle_session_backup(&session_name)
+            }
         }
     }
 
@@ -316,6 +319,14 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
             Err(e) => OutgoingMessage::error(e.to_string()),
         }
     }
+
+    fn handle_session_backup(&self, session_name: &str) -> OutgoingMessage {
+        match self.session_loader.backup_session(session_name) {
+            Ok(path) => OutgoingMessage::success(Some(serde_json::json!({"path": path}))),
+            Err(e) => OutgoingMessage::error(e.to_string()),
+        }
+    }
+
     fn handle_session_listing(&self) -> OutgoingMessage {
         match self.session_loader.list_sessions() {
             Ok(sessions) => {
@@ -324,6 +335,8 @@ impl<'lifetime> NativeMessagingHost<'lifetime> {
             Err(e) => OutgoingMessage::error(e.to_string()),
         }
     }
+
+    #[allow(dead_code)]
     fn with_tracker_mut_empty<F, T>(&mut self, f: F) -> OutgoingMessage
     where
         F: FnOnce(&mut Tracker) -> Result<T, HandlerError>,
