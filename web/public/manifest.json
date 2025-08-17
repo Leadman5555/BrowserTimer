@@ -9,12 +9,11 @@
   },
   "action": {
     "default_popup": "/src/popup/popup.html",
-    "default_title": "View Tracked Time"
+    "default_title": "Browser Timer"
   },
   "permissions": [
     "tabs",
     "activeTab",
-    "scripting",
     "nativeMessaging",
     "alarms"
   ],

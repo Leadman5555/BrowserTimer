@@ -185,7 +185,7 @@ export default function Popup() {
           <div style={styles.sectionCard}>
             <h3 style={styles.sectionTitle}>
               <span style={styles.sectionIcon}>➕</span>
-              Start New Session
+              Start a new session
             </h3>
             <div style={styles.inputGroup}>
               <input
@@ -209,7 +209,7 @@ export default function Popup() {
           <div style={styles.sectionCard}>
             <h3 style={styles.sectionTitle}>
               <span style={styles.sectionIcon}>📂</span>
-              Load Existing Session
+              Load an existing session
             </h3>
             <div style={styles.inputGroup}>
               <select

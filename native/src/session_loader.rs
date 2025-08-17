@@ -47,7 +47,7 @@ impl SessionLoader {
                 ))
             })?;
 
-        path.push("browser_tracker");
+        path.push("browser_timer");
         path.push("sessions");
         Ok(path)
     }
