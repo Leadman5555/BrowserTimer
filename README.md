@@ -33,6 +33,8 @@ Application logs are stored in the `/native/logs` folder. Sessions and session b
 
 If you get the "Couldn't connect to the native host" error on extension start-up and have configured it correctly, try reloading the extension in the browser extension management tab.
 
+For whatever reason, Windows Defender thinks that the `native.exe` is malicious. If you wish to build the whole extension by yourself from the source code instead of downloading the prodived `.zip` folder, then feel free to do so. The web part is bundled with Vite.
+
 #### How to use it?
 
 After installation, load the desired session or create a new one. To see the most recent data, toggle the "Show results" button. The session will save itself when you close the browser, so don't worry 
